@@ -4,9 +4,7 @@ function randInt(max) {
   return Math.round(rand);
 }
 var tower = null;
-var energyInStorageStarted = 2.9e5;
-var energyInStorageStoped = 2e5;
-var upgrade = false;
+var energyInStorage = 3e5;
 
 module.exports = {
 
@@ -42,24 +40,19 @@ module.exports = {
         }
         var stor = tower.room.find(FIND_STRUCTURES,
                             { filter: function(obj)
-                                    {
-                                        if(obj.structureType == STRUCTURE_STORAGE)
-                                          return true;
-                                        return false;
+                                {
+                                    if(obj.structureType == STRUCTURE_STORAGE)
+                                        {
+                                            return obj.store.getUsedCapacity(RESOURCE_ENERGY) >= energyInStorage;
                                         }
-                            });
+                                            return false;
+                                        }
+                                    }
+                                );
         // if(!isNaN(stor))
+        // {
         //     return false;
-        // if(stor.store.getUsedCapacity(RESOURCE_ENERGY) > energyInStorageStarted)
-        //   upgrade = true;
-        // else if((stor.store.getUsedCapacity(RESOURCE_ENERGY) < energyInStorageStoped))
-        //   upgrade = false;
-        // if(!upgrade)
-        //   return false;
-        if(tower.store.getUsedCapacity(RESOURCE_ENERGY) > 500)
-          upgrade = true;
-        else
-          upgrade = false;
+        // }
 
         var walls = tower.room.find(FIND_STRUCTURES,
                                         {filter: function(obj)
@@ -137,7 +130,6 @@ module.exports = {
     {
         for(i in Game.rooms)
         {
-          var get_repair = false;
             var room = Game.rooms[i];
             var towers = room.find(FIND_MY_STRUCTURES, {filter: { structureType: STRUCTURE_TOWER}});
             for (i in towers){

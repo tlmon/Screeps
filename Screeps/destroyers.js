@@ -5,13 +5,12 @@ function randInt() {
   return Math.round(rand);
 }
 const body650 = [MOVE, CLAIM]
-const create = false;
 var bodyx = null;
 var spawn1 = null;
 var count = 0;
 const max = 1;
 next = 1000;
-const flag1 = Game.flags['claim']
+const flag1 = Game.flags['new']
 var wght = null;
 var cr = null;
 const live = 0;
@@ -31,8 +30,7 @@ module.exports = {
 
     creating : function()
     {
-        if (!create)
-          return;
+
         var energ = spawn1.store.getUsedCapacity(RESOURCE_ENERGY);
         var extensions = spawn1.room.find(FIND_MY_STRUCTURES, {filter: { structureType: STRUCTURE_EXTENSION }});
         if(extensions.length > 0)
@@ -70,18 +68,11 @@ module.exports = {
 
     workDTR : function()
     {
-        if(cr.room.name != flag1.room.name)
+        const contr = cr.room.controller;
+        if(cr.claimController(contr) == ERR_NOT_IN_RANGE)
         {
-            cr.moveTo(flag1)
+            // cr.moveTo(flag1);
         }
-        else{
-          const contr = cr.room.controller;
-          if(cr.claimController(contr) == ERR_NOT_IN_RANGE)
-          {
-              cr.moveTo(contr);
-          }
-        }
-
     },
 
     working : function()

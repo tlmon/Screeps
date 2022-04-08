@@ -4,35 +4,60 @@ function randInt() {
   let rand = min - 0.5 + Math.random() * (max - min + 1);
   return Math.round(rand);
 }
-const body650 = [MOVE, CLAIM]
+const body1700 = [MOVE, MOVE, WORK, WORK, WORK, WORK,
+                MOVE, MOVE, WORK, WORK, WORK, WORK,
+                MOVE, MOVE, WORK, WORK, CARRY, CARRY,
+                MOVE, MOVE, CARRY, CARRY, CARRY, CARRY];
 var bodyx = null;
-var spawn1 = null;
-var count = 0;
-const max = 1;
-next = 1000;
-const flag1 = Game.flags['new']
+var spawnx = null;
 var wght = null;
+const max = [0]
 var cr = null;
-const live = 0;
+var num = 0;
+const live = 300;
+
 module.exports = {
-    createDTR : function()
+    createMNR : function()
     {
-        var log = spawn1.createCreep(bodyx, 'DTR' + randInt(),  {role : 'DTR', weight : wght, full : false});
+        var log = spawnx.createCreep(bodyx, 'MNR' + randInt(),  {role : 'MNR', full : false, weight : wght, sp : spawnx.name, minType : null});
         if(_.isString(log))
         {
-            console.log('create new DTR ' + log);
-            // next = 0;
+            console.log('create new MNR ' + log);
         }
         else
-            console.log('create DTR error ' + log);
+            console.log('create MNR error ' + log);
 
     },
 
     creating : function()
     {
 
-        var energ = spawn1.store.getUsedCapacity(RESOURCE_ENERGY);
-        var extensions = spawn1.room.find(FIND_MY_STRUCTURES, {filter: { structureType: STRUCTURE_EXTENSION }});
+        var min = spawnx.room.find(FIND_MINERALS,
+                                                    { filter: function(obj)
+                                                        {
+                                                            return obj.mineralAmount > 0;
+                                                        }
+                                                    });
+        var term = spawnx.room.find(FIND_MY_STRUCTURES,
+                                                { filter: function(obj)
+                                                    {
+                                                        if(obj.structureType == STRUCTURE_TERMINAL)
+                                                        {
+                                                            return obj.store.getFreeCapacity() > 2e3;
+                                                        }
+                                                        return false;
+                                                    }
+                                                }
+                                            );
+        // console.log(min)
+        if(min.length == 0)
+            return;
+        if(!term)
+            return;
+
+
+        var energ = spawnx.store.getUsedCapacity(RESOURCE_ENERGY);
+        var extensions = spawnx.room.find(FIND_MY_STRUCTURES, {filter: { structureType: STRUCTURE_EXTENSION }});
         if(extensions.length > 0)
         {
             for(var i in extensions)
@@ -40,39 +65,95 @@ module.exports = {
                 energ += extensions[i].store.getUsedCapacity(RESOURCE_ENERGY);
             }
         }
-        if(energ >= 650)
+        if(energ >= 1700)
         {
-            bodyx = body650;
+            bodyx = body1700;
             wght = 1;
         }
         else
             return;
 
+        var count = 0;
 
-        count = 0;
+
 
         for(var name in Game.creeps)
         {
             cr = Game.creeps[name];
-            if(cr.memory.role == 'DTR')
+            if(cr.memory.role == 'MNR' && cr.memory.sp == spawnx.name)
             {
-                count += cr.memory.weight;
+                count += cr.weight;
             }
         }
-        if(count < max)
-        {
-            console.log("DTR now " + count + ' max ' + max, 'new: weight', wght);
-            this.createDTR();
+        // console.log(count, spawnx)
+        if(count < max[num]){
+            console.log(spawnx.name, "MNR now ", count, 'max', max[num], 'new: weight', wght);
+            this.createMNR();
         }
     },
 
-    workDTR : function()
+    mine : function()
     {
-        const contr = cr.room.controller;
-        if(cr.claimController(contr) == ERR_NOT_IN_RANGE)
+        var total = cr.store.getUsedCapacity();
+        var free = cr.store.getFreeCapacity();
+        const mineral = cr.pos.findClosestByRange(FIND_MINERALS);
+        if(total == 0)
         {
-            // cr.moveTo(flag1);
+            cr.memory.full = false;
+            if(cr.ticksToLive < live || mineral.mineralAmount == 0)
+            {
+                sp = Game.spawns[cr.memory.sp];
+                if(sp.recycleCreep(cr) == ERR_NOT_IN_RANGE)
+                    cr.moveTo(sp);
+                return;
+            }
         }
+        if(free > 0 && !cr.memory.full)
+        {
+            if(mineral.mineralAmount > 0)
+            {
+                cr.memory.minType = mineral.mineralType;
+                if(cr.harvest(mineral) == ERR_NOT_IN_RANGE)
+                    cr.moveTo(mineral);
+            }
+            else
+            {
+                cr.memory.full = true;
+            }
+        }
+
+        if(free == 0)
+            cr.memory.full = true;
+    },
+
+
+
+    workMNR : function()
+    {
+        // console.log(cr.ticksToLive)
+        this.mine();
+        if(cr.memory.full)
+        {
+            var total = cr.store.getUsedCapacity();
+            var put = cr.pos.findClosestByRange(FIND_STRUCTURES,
+                                                    { filter: function(obj)
+                                                        {
+                                                            if(obj.structureType == STRUCTURE_TERMINAL)
+                                                            {
+                                                                return obj.store.getFreeCapacity() >= total;
+                                                            }
+                                                            return false;
+                                                        }
+                                                    });
+            if(put)
+            {
+                if(cr.transfer(put, cr.memory.minType) == ERR_NOT_IN_RANGE)
+                {
+                    cr.moveTo(put);
+                }
+            }
+        }
+
     },
 
     working : function()
@@ -81,19 +162,24 @@ module.exports = {
         for(var name in Game.creeps)
         {
             cr = Game.creeps[name];
-            if(cr.memory.role == 'DTR')
+            if(cr.memory.role == 'MNR')
             {
-                this.workDTR();
+                this.workMNR();
             }
         }
     },
 
     main : function()
     {
-        spawn1 = Game.spawns.Spawn1;
-        ++next;
-        if(!spawn1.spawning && next >= 1000)
-            this.creating();
+        num = 0;
+        const spwns = [Game.spawns['Spawn1']];
+        for(i in spwns)
+        {
+            spawnx = spwns[i];
+            if(!spawnx.spawning)
+                this.creating();
+            ++num;
+        }
         this.working();
     }
 };
