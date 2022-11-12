@@ -5,86 +5,76 @@ function randInt() {
   return Math.round(rand);
 }
 const body800 = [
-                MOVE, MOVE, WORK, WORK, CARRY, CARRY,
-                MOVE, MOVE, WORK, WORK, CARRY, CARRY];
-var bodyx = null;
-var spawn1 = null;
-var wght = null;
-var max = 1;
-var cr = null;
-const flag1 = Game.flags['new'];
+  WORK, WORK, CARRY, CARRY, MOVE, MOVE,
+  WORK, WORK, CARRY, CARRY, MOVE, MOVE];
+var max = 3;
+const flag_new = Game.flags['new'];
+const create_permission = false;
 
 module.exports = {
-    createSCR : function()
+    createSCR : function(sp, cur_body)
     {
-        var log = spawn1.createCreep(bodyx, 'SCR' + randInt(),  {role : 'SCR', full : false, weight : wght});
-        if(_.isString(log))
-        {
-            console.log('create new SCR ' + log);
-        }
-        else
-            console.log('create HRV error ' + log);
-
+      var creep_name = 'SCR_' + sp.name + '_' + randInt();
+      console.log('create new', creep_name, 'result:',
+        sp.spawnCreep(cur_body, creep_name,
+          {memory:
+            {
+              role : 'SCR',
+              sp : sp.name
+            },
+            directions : [LEFT, RIGHT]
+          }
+        )
+      );
     },
 
-    creating : function()
+    creating : function(sp)
     {
-
-        var energ = spawn1.energy;
-        // var capacity = spawn1.energyCapacity;
-        var extensions = spawn1.room.find(FIND_MY_STRUCTURES, {filter: { structureType: STRUCTURE_EXTENSION }});
-        if(extensions.length > 0)
-        {
-            for(var i in extensions)
-            {
-                energ += extensions[i].energy;
-                // capacity += extensions[i].energyCapacity;
-            }
-        }
-        if(energ >= 800)
-        {
-            bodyx = body800;
-            wght = 1;
-        }
-        else
-            return;
-
-        var count = 0;
-
-
-        for(var name in Game.creeps)
-        {
-            cr = Game.creeps[name];
-            if(cr.memory.role == 'SCR')
-            {
-                count += cr.memory.weight;
-            }
-        }
-
-        if(count < max)
-        {
-            console.log("SCR now ", count, 'max', max, 'new: weight', wght);
-            this.createSCR();
-        }
+      var count = 0;
+      for(var name in Game.creeps)
+      {
+          cr = Game.creeps[name];
+          if(cr.memory.role == 'SCR')
+              ++count;
+      }
+      if(count >= max)
+        return;
+      var energy_available = sp.room.energyAvailable;
+      var cur_body = null;
+      if(energy_available >= 800)
+        cur_body = body800;
+      else
+        return;
+      this.createSCR(sp, cur_body);
     },
 
-    mine : function()
+    mine : function(cr)
     {
         var total = cr.store.getUsedCapacity(RESOURCE_ENERGY);
         var free = cr.store.getFreeCapacity(RESOURCE_ENERGY);
         var sour = cr.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
+        var ruin = cr.pos.findClosestByRange(FIND_RUINS,
+          { filter: function(obj)
+              {
+                  if(obj.store[RESOURCE_ENERGY] > 0)
+                      return true;
+                  return false;
+              }
+          }
+        );
+
         if(total == 0)
             cr.memory.full = false;
-
-        if(free > 0 && !cr.memory.full)
+        if(free > 0 && !cr.memory.full && sour)
         {
-            if(sour)
-            {
-                if(cr.harvest(sour) == ERR_NOT_IN_RANGE)
-                    cr.moveTo(sour);
+            if (ruin && ruin.pos.roomName == cr.pos.roomName){
+                if(cr.withdraw(ruin, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE)
+                    cr.moveTo(ruin);
             }
+            else
+             if(cr.harvest(sour) == ERR_NOT_IN_RANGE)
+                    cr.moveTo(sour);
         }
-
         if(free == 0)
             cr.memory.full = true;
     },
@@ -92,35 +82,33 @@ module.exports = {
 
     workSCR : function()
     {
-        // console.log(cr.room, flag1.room)
-        if(cr.room.name != flag1.room.name)
-        {
-            cr.moveTo(flag1)
-        }
+      // if(cr.room.controller) {
+      //   if(cr.signController(cr.room.controller, "No war!") == ERR_NOT_IN_RANGE) {
+      //     cr.moveTo(cr.room.controller);
+      //   }
+      // }
+        // console.log(cr.room.name, flag_new.pow.roomName);
+        if(cr.room.name != flag_new.pos.roomName)
+            cr.moveTo(flag_new)
         else
         {
-            this.mine();
+            this.mine(cr);
             if(cr.memory.full)
             {
                 var constr = cr.pos.findClosestByRange(FIND_CONSTRUCTION_SITES);
-
+                var contr = cr.room.controller;
                 if(constr) {
-                    if(cr.build(constr) == ERR_NOT_IN_RANGE) {
+                    if(cr.build(constr) == ERR_NOT_IN_RANGE)
                         cr.moveTo(constr);
-                    }
                 }
                 else
-                if(cr.room.controller)
+                if(contr)
                 {
-
-                    if(cr.upgradeController(cr.room.controller) == ERR_NOT_IN_RANGE)
-                        cr.moveTo(cr.room.controller);
-
+                    if(cr.upgradeController(contr) == ERR_NOT_IN_RANGE)
+                        cr.moveTo(contr);
                 }
             }
-
         }
-
     },
 
     working : function()
@@ -131,17 +119,16 @@ module.exports = {
             cr = Game.creeps[name];
             if(cr.memory.role == 'SCR')
             {
-                this.workSCR();
+              this.workSCR(cr);
             }
         }
     },
 
     main : function()
     {
-        spawn1 = Game.spawns.Spawn1;
-
-        if(!spawn1.spawning)
-            this.creating();
+        sp = Game.spawns['Spawn1'];
+        if(!sp.spawning && create_permission)
+            this.creating(sp);
         this.working();
     }
 };
